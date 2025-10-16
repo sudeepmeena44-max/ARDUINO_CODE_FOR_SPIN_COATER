@@ -1,0 +1,101 @@
+# CODE FOR AURDION IN C++
+
+#include <Servo.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// ---- Pin Configuration ----
+#define ESC_PIN 9         // ESC signal pin
+#define POT_PIN A0        // Potentiometer input pin
+#define BUTTON_PIN 7      // Start/Stop button
+#define SCREEN_WIDTH 128  // OLED display width
+#define SCREEN_HEIGHT 64  // OLED display height
+
+// ---- ESC and Motor ----
+Servo esc; 
+int potValue;
+int escValue;
+bool motorRunning = false;
+
+// ---- OLED Display ----
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+// ---- Timer ----
+unsigned long startTime;
+unsigned long spinDuration = 10000; // 10 seconds spin (can be adjusted)
+
+void setup() {
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  
+  // ESC setup
+  esc.attach(ESC_PIN, 1000, 2000); // min=1000, max=2000 microseconds
+  esc.writeMicroseconds(1000);     // initialize to stop
+  delay(2000); // Allow ESC to initialize
+
+  // OLED setup
+  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    for(;;); // Don't proceed if OLED not found
+  }
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+
+  // Welcome screen
+  display.setCursor(10, 20);
+  display.print("Spin Coater Ready!");
+  display.display();
+  delay(2000);
+}
+
+void loop() {
+  // Read potentiometer (0-1023)
+  potValue = analogRead(POT_PIN);
+
+  // Map potentiometer value to ESC signal (1000-2000us)
+  escValue = map(potValue, 0, 1023, 1000, 2000);
+
+  // Button press handling
+  if(digitalRead(BUTTON_PIN) == LOW) {
+    delay(200); // debounce
+    motorRunning = !motorRunning;
+    if(motorRunning) {
+      startTime = millis();
+    } else {
+      esc.writeMicroseconds(1000); // stop motor
+    }
+  }
+
+  // Motor control
+  if(motorRunning) {
+    if(millis() - startTime < spinDuration) {
+      esc.writeMicroseconds(escValue);
+    } else {
+      esc.writeMicroseconds(1000); // stop after duration
+      motorRunning = false;
+    }
+  }
+
+  // Display update
+  display.clearDisplay();
+  display.setCursor(0, 0);
+  display.print("Spin Coater");
+
+  display.setCursor(0, 15);
+  display.print("RPM: ");
+  int rpm = map(potValue, 0, 1023, 0, 12000); // approximate max RPM
+  display.print(rpm);
+
+  display.setCursor(0, 30);
+  display.print("State: ");
+  display.print(motorRunning ? "RUNNING" : "STOPPED");
+
+  if(motorRunning) {
+    display.setCursor(0, 45);
+    display.print("Time left: ");
+    display.print((spinDuration - (millis() - startTime)) / 1000);
+    display.print("s");
+  }
+
+  display.display();
+}

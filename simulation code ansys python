@@ -1,0 +1,95 @@
+Simulation code :- # Python simulation of axisymmetric spin-coating film-thickness evolution
+# Solves PDE: ∂h/∂t = (rho*omega**2/(3*mu)) * (1/r) * ∂(r^2 h^3)/∂r - E
+# using a finite-volume discretization in r (method-of-lines) and solve_ivp.
+# This is a simple demonstrator — you asked for "how to do it" and a runnable model.
+# Adjust parameters (rho, omega, mu, E, R, N) for your experiment.
+import numpy as np
+from scipy.integrate import solve_ivp
+import matplotlib.pyplot as plt
+
+# physical parameters (example values; replace with yours)
+rho = 1000.0      # kg/m^3 (liquid density)
+omega = 200.0     # rad/s (spin speed)
+mu = 0.1          # Pa.s (viscosity)
+E = 1e-7          # m/s (evaporation rate) - small example
+
+# geometry & numerics
+R = 0.03          # radius of wafer / domain (m)
+N = 200           # number of radial cells
+r = np.linspace(R/(2*N), R - R/(2*N), N)  # cell centers (avoid r=0 exactly)
+dr = r[1] - r[0]
+
+pref = rho * omega**2 / (3.0 * mu)
+
+def rhs(t, h):
+    # finite-volume flux-based discretization
+    # flux at edges: F_{i+1/2} = pref * (r_edge*2) * (h_edge*3)
+    # h_edge approximated by arithmetic average of neighbor cell values (simple and stable-ish)
+    h = np.maximum(h, 0.0)  # prevent negative values due to numeric noise
+    # compute edge radii
+    r_edges = np.zeros(N+1)
+    r_edges[1:-1] = 0.5*(r[:-1] + r[1:])  # internal edges
+    r_edges[0] = 0.0
+    r_edges[-1] = R
+    # compute h at edges by averaging neighboring cell centers (for edge 0 use center adjacent)
+    h_edges = np.zeros(N+1)
+    h_edges[1:-1] = 0.5*(h[:-1] + h[1:])
+    h_edges[0] = h[0]   # symmetry at center -> use first cell value
+    h_edges[-1] = h[-1] # assume last cell value at outer edge (could use boundary condition h=0)
+    # flux at edges
+    F_edges = pref * (r_edges*2) * (h_edges*3)
+    # enforce symmetry at axis: flux at r=0 is zero
+    F_edges[0] = 0.0
+    # optional: outer boundary - allow outflow (natural) OR set to zero flux
+    # here we allow computed flux (which may push film outwards) but can also clamp to 0:
+    # F_edges[-1] = 0.0
+    
+    # compute divergence (1/r_i) * (F_{i+1/2} - F_{i-1/2}) / dr
+    dF = (F_edges[1:] - F_edges[:-1]) / dr
+    dhdt = (1.0 / r) * dF - E
+    # near r very small, numerical division could be large; handle small r by limit:
+    small = (r < 1e-10)
+    if np.any(small):
+        dhdt[small] = (1.0 / (1e-10)) * dF[small] - E
+    return dhdt
+
+# initial condition: uniform film thickness h0
+h0 = 1e-5  # 10 microns
+h_init = np.ones(N) * h0
+
+tspan = (0.0, 10.0)  # seconds
+t_eval = np.linspace(tspan[0], tspan[1], 301)
+
+sol = solve_ivp(rhs, tspan, h_init, method='RK23', t_eval=t_eval, atol=1e-9, rtol=1e-6)
+
+# plot results: central thickness vs time and profile snapshots
+plt.figure(figsize=(8,4))
+plt.plot(sol.t, sol.y[N//2,:])
+plt.xlabel('time (s)')
+plt.ylabel('h(center) (m)')
+plt.title('Central film thickness vs time')
+plt.grid(True)
+plt.tight_layout()
+
+# snapshot profiles
+times_to_plot = [0.0, 0.2, 1.0, 5.0, 10.0]
+plt.figure(figsize=(8,4))
+for tt in times_to_plot:
+    idx = np.argmin(np.abs(sol.t - tt))
+    plt.plot(r, sol.y[:, idx], label=f't={sol.t[idx]:.2f}s')
+plt.xlabel('r (m)')
+plt.ylabel('h (m)')
+plt.title('Film profile snapshots')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+
+# show plots
+plt.show()
+
+# save a small data file for later use
+import pandas as pd
+df = pd.DataFrame(sol.y.T, columns=[f'h_{i}' for i in range(N)])
+df['t'] = sol.t
+df.to_csv('/mnt/data/film_evolution.csv', index=False)
+print("Saved time-series to /mnt/data/film_evolution.csv")

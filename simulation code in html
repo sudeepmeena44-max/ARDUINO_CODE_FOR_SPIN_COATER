@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thin Film Evolution Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Thin Film Evolution Simulation</h1>
+            <p class="text-md text-gray-600 mt-2">Based on the provided radial momentum and continuity equations.</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- CONTROLS PANEL -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold mb-6 border-b pb-3">Control Parameters</h2>
+
+                <!-- Initial Thickness -->
+                <div class="mb-4">
+                    <label for="h0" class="slider-label font-medium text-gray-700"><span>Initial Thickness (h₀)</span> <span id="h0Value" class="font-mono bg-gray-200 px-2 py-1 rounded text-sm">100 µm</span></label>
+                    <input type="range" id="h0" min="10" max="200" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <!-- Angular Velocity -->
+                <div class="mb-4">
+                    <label for="omega" class="slider-label font-medium text-gray-700"><span>Angular Velocity (ω)</span> <span id="omegaValue" class="font-mono bg-gray-200 px-2 py-1 rounded text-sm">50 rad/s</span></label>
+                    <input type="range" id="omega" min="1" max="200" value="50" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <!-- Viscosity -->
+                <div class="mb-4">
+                    <label for="mu" class="slider-label font-medium text-gray-700"><span>Viscosity (μ)</span> <span id="muValue" class="font-mono bg-gray-200 px-2 py-1 rounded text-sm">10 cP</span></label>
+                    <input type="range" id="mu" min="1" max="100" value="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <!-- Density -->
+                <div class="mb-4">
+                    <label for="rho" class="slider-label font-medium text-gray-700"><span>Density (ρ)</span> <span id="rhoValue" class="font-mono bg-gray-200 px-2 py-1 rounded text-sm">1000 kg/m³</span></label>
+                    <input type="range" id="rho" min="500" max="2000" value="1000" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+                
+                <!-- Evaporation Rate -->
+                <div class="mb-4">
+                    <label for="evaporation" class="slider-label font-medium text-gray-700"><span>Evaporation (E)</span> <span id="evaporationValue" class="font-mono bg-gray-200 px-2 py-1 rounded text-sm">0.1 µm/s</span></label>
+                    <input type="range" id="evaporation" min="0" max="5" value="0.1" step="0.05" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <div class="mt-8 flex space-x-4">
+                    <button id="startPauseBtn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Start</button>
+                    <button id="resetBtn" class="w-full bg-gray-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-700 transition-colors">Reset</button>
+                </div>
+            </div>
+
+            <!-- VISUALIZATION & PLOT -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                    <div class="md:col-span-1 text-center">
+                        <h3 class="text-xl font-semibold mb-2">Live Thickness</h3>
+                        <div class="w-48 h-48 mx-auto bg-gray-200 rounded-lg relative overflow-hidden">
+                           <div id="filmVisualization" class="absolute bottom-0 left-0 w-full bg-blue-500 transition-all duration-200 ease-linear"></div>
+                           <div class="absolute top-2 right-2 text-xs text-gray-500">Substrate</div>
+                        </div>
+                        <div class="mt-4">
+                           <p class="text-lg font-bold">Time: <span id="timeDisplay" class="font-mono">0.00 s</span></p>
+                           <p class="text-lg font-bold">Thickness: <span id="thicknessDisplay" class="font-mono">100.0 µm</span></p>
+                        </div>
+                    </div>
+                    <div class="md:col-span-2 h-80">
+                         <canvas id="thicknessChart"></canvas>
+                    </div>
+                </div>
+                 <!-- Explanation Section -->
+                <div class="mt-8 pt-6 border-t">
+                    <h2 class="text-2xl font-semibold mb-4">Simulation Insights</h2>
+                    <div class="space-y-4 text-gray-700">
+                        <p>This simulation models the two primary stages of film thinning:</p>
+                        <ul class="list-disc list-inside space-y-2 pl-4">
+                            <li><strong class="text-gray-900">Flow Dominated Stage:</strong> Initially, the film is thick, and the centrifugal force term (ρ * ω² * h³ / 3μ) is large. This causes a rapid decrease in thickness, where h ∝ t⁻¹ᐟ². You can see this as the steep initial drop on the chart.</li>
+                            <li><strong class="text-gray-900">Evaporation Dominated Stage:</strong> As the film gets thinner, the flow term (proportional to h³) diminishes rapidly. The thinning process becomes dominated by the constant evaporation rate E, resulting in a slow, linear decrease in thickness.</li>
+                        </ul>
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                             <h4 class="font-semibold text-lg text-blue-800">How is the Final Film Thickness (h_f) Determined?</h4>
+                             <p class="mt-2 text-blue-700">Final thickness is "Experimentally Determined." The simulation shows why this is the case. In a real-world scenario, the process is stopped when the desired thickness is reached, or when the thinning rate becomes impractically slow. The model h_f = K'ω⁻ⁿ is an empirical formula created by running many experiments at different angular velocities (ω), measuring the resulting h_f, and then fitting the data to that equation. The simulation allows you to explore how changing ω and other parameters affects the final thickness you could achieve in a given time.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const h0Slider = document.getElementById('h0');
+        const omegaSlider = document.getElementById('omega');
+        const muSlider = document.getElementById('mu');
+        const rhoSlider = document.getElementById('rho');
+        const evaporationSlider = document.getElementById('evaporation');
+
+        const h0Value = document.getElementById('h0Value');
+        const omegaValue = document.getElementById('omegaValue');
+        const muValue = document.getElementById('muValue');
+        const rhoValue = document.getElementById('rhoValue');
+        const evaporationValue = document.getElementById('evaporationValue');
+        
+        const startPauseBtn = document.getElementById('startPauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        const timeDisplay = document.getElementById('timeDisplay');
+        const thicknessDisplay = document.getElementById('thicknessDisplay');
+        const filmVisualization = document.getElementById('filmVisualization');
+
+        const chartCanvas = document.getElementById('thicknessChart');
+
+        // Simulation State
+        let simState = {
+            h: 0,       // current thickness in meters
+            t: 0,       // current time in seconds
+            h0: 0,      // initial thickness in meters
+            omega: 0,   // rad/s
+            mu: 0,      // Pa*s
+            rho: 0,     // kg/m^3
+            E: 0,       // evaporation rate in m/s
+            isRunning: false,
+            animationFrameId: null
+        };
+        
+        let chart;
+        const dt = 0.01; // Time step for simulation
+
+        // Unit Conversion Constants
+        const MICROMETERS_TO_METERS = 1e-6;
+        const CENTIPOISE_TO_PASCAL_SECONDS = 1e-3;
+
+        // Functions
+        function updateSliderDisplays() {
+            h0Value.textContent = ${h0Slider.value} µm;
+            omegaValue.textContent = ${omegaSlider.value} rad/s;
+            muValue.textContent = ${muSlider.value} cP;
+            rhoValue.textContent = ${rhoSlider.value} kg/m³;
+            evaporationValue.textContent = ${parseFloat(evaporationSlider.value).toFixed(2)} µm/s;
+        }
+        
+        function getParamsFromSliders() {
+            simState.h0 = parseFloat(h0Slider.value) * MICROMETERS_TO_METERS;
+            simState.omega = parseFloat(omegaSlider.value);
+            simState.mu = parseFloat(muSlider.value) * CENTIPOISE_TO_PASCAL_SECONDS;
+            simState.rho = parseFloat(rhoSlider.value);
+            simState.E = parseFloat(evaporationSlider.value) * MICROMETERS_TO_METERS;
+        }
+
+        function resetSimulation() {
+            if (simState.animationFrameId) {
+                cancelAnimationFrame(simState.animationFrameId);
+            }
+            simState.isRunning = false;
+            startPauseBtn.textContent = 'Start';
+            setControlsState(true);
+
+            getParamsFromSliders();
+            simState.t = 0;
+            simState.h = simState.h0;
+
+            updateDisplays();
+            updateChartData(true);
+        }
+        
+        function setControlsState(enabled) {
+            h0Slider.disabled = !enabled;
+            omegaSlider.disabled = !enabled;
+            muSlider.disabled = !enabled;
+            rhoSlider.disabled = !enabled;
+            evaporationSlider.disabled = !enabled;
+        }
+
+        function toggleSimulation() {
+            simState.isRunning = !simState.isRunning;
+            if (simState.isRunning) {
+                setControlsState(false);
+                startPauseBtn.textContent = 'Pause';
+                simState.animationFrameId = requestAnimationFrame(simulationLoop);
+            } else {
+                startPauseBtn.textContent = 'Resume';
+                cancelAnimationFrame(simState.animationFrameId);
+            }
+        }
+        
+        function updateDisplays() {
+            const h_micrometers = simState.h / MICROMETERS_TO_METERS;
+            timeDisplay.textContent = ${simState.t.toFixed(2)} s;
+            thicknessDisplay.textContent = ${h_micrometers.toFixed(1)} µm;
+            
+            // Update visualization height (relative to max initial height)
+            const visHeightPercent = Math.min(100, (h_micrometers / parseFloat(h0Slider.max)) * 100);
+            filmVisualization.style.height = ${visHeightPercent}%;
+        }
+
+        function simulationLoop() {
+            // Core equation: dh/dt = - (rho * omega^2 * h^3) / (3 * mu) - E
+            const flowTerm = (simState.rho * Math.pow(simState.omega, 2) * Math.pow(simState.h, 3)) / (3 * simState.mu);
+            const dh_dt = -flowTerm - simState.E;
+            
+            // Euler method to update thickness
+            simState.h = simState.h + dh_dt * dt;
+
+            // Stop if thickness becomes non-positive
+            if (simState.h <= 0) {
+                simState.h = 0;
+                simState.isRunning = false;
+                startPauseBtn.textContent = 'Finished';
+                startPauseBtn.disabled = true;
+            }
+            
+            simState.t += dt;
+            
+            updateDisplays();
+            updateChartData(false);
+
+            if (simState.isRunning) {
+                simState.animationFrameId = requestAnimationFrame(simulationLoop);
+            }
+        }
+        
+        function initializeChart() {
+            const ctx = chartCanvas.getContext('2d');
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Film Thickness (µm)',
+                        data: [],
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time (s)'
+                            },
+                            ticks: {
+                                maxTicksLimit: 10
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Thickness (µm)'
+                            },
+                            beginAtZero: true
+                        }
+                    },
+                    animation: {
+                        duration: 0
+                    }
+                }
+            });
+        }
+        
+        function updateChartData(shouldReset) {
+            if (shouldReset) {
+                chart.data.labels = [0];
+                chart.data.datasets[0].data = [simState.h0 / MICROMETERS_TO_METERS];
+            } else {
+                // To avoid overloading the chart, only add data points periodically
+                if (chart.data.labels.length === 0 || simState.t - chart.data.labels[chart.data.labels.length - 1] > 0.1) {
+                    chart.data.labels.push(simState.t.toFixed(2));
+                    chart.data.datasets[0].data.push(simState.h / MICROMETERS_TO_METERS);
+                }
+            }
+            chart.update();
+        }
+
+        // Event Listeners
+        window.addEventListener('load', () => {
+            updateSliderDisplays();
+            initializeChart();
+            resetSimulation();
+        });
+
+        h0Slider.addEventListener('input', updateSliderDisplays);
+        omegaSlider.addEventListener('input', updateSliderDisplays);
+        muSlider.addEventListener('input', updateSliderDisplays);
+        rhoSlider.addEventListener('input', updateSliderDisplays);
+        evaporationSlider.addEventListener('input', updateSliderDisplays);
+
+        startPauseBtn.addEventListener('click', toggleSimulation);
+        resetBtn.addEventListener('click', () => {
+            startPauseBtn.disabled = false;
+            resetSimulation();
+        });
+
+    </script>
+
+</body>
+</html>

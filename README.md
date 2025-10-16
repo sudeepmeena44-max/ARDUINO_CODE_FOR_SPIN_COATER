@@ -1,6 +1,6 @@
 # ARDUINO_CODE_FOR_SPIN_COATER
 
-Electronic Circuit and Control Design
+
 Components Used
 Component	Description
 Arduino Uno WiFi Rev2	Microcontroller
